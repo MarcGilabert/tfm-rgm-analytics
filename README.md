@@ -32,6 +32,7 @@ Un cuarto bloque identifica perfiles de comportamiento promocional que matizan l
 ```
 tfm-app/
 ├── app.py                          # Aplicación Streamlit
+├── Dockerfile
 ├── requirements.txt
 ├── data/                           # Resultados procesados (CSV)
 └── notebooks/
@@ -52,13 +53,32 @@ tfm-app/
 | Baseline e incrementalidad | XGBoost, con comparación frente a Regresión Lineal, Árbol de Decisión, Random Forest, Extra Trees y Gradient Boosting |
 | Segmentación promocional | K-Means |
 
+## Aplicación desplegada
+
+La aplicación está containerizada con Docker y desplegada en Google Cloud Run:
+
+**[https://tfm-rgm-app-3606564883.europe-west1.run.app](https://tfm-rgm-app-3606564883.europe-west1.run.app)**
+
+Arquitectura de despliegue: imagen Docker → Google Artifact Registry → Google Cloud Run.
+
 ## Ejecutar la aplicación en local
+
+**Opción 1 — Con Python:**
 
 ```bash
 git clone https://github.com/MarcGilabert/tfm-rgm-analytics.git
 cd tfm-rgm-analytics
 pip install -r requirements.txt
 streamlit run app.py
+```
+
+**Opción 2 — Con Docker:**
+
+```bash
+git clone https://github.com/MarcGilabert/tfm-rgm-analytics.git
+cd tfm-rgm-analytics
+docker build -t tfm-rgm-app .
+docker run -p 8501:8501 tfm-rgm-app
 ```
 
 ## Limitaciones
