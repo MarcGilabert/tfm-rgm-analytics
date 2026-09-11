@@ -22,9 +22,8 @@ d = cargar_datos()
 st.sidebar.title("RGM Analytics")
 pagina = st.sidebar.radio(
     "Navegacion",
-    ["Resumen", "Pricing", "Clientes", "Perfiles"]
+    ["Resumen", "Pricing", "Clientes", "Perfiles", "Consulta"]
 )
-
 # ─────────────────────────────────────────────
 # PAGINA 1: RESUMEN
 # ─────────────────────────────────────────────
@@ -59,12 +58,12 @@ if pagina == "Resumen":
         ef = d['eficiencia'].copy()
         fig = px.bar(
             ef.sort_values('eficiencia'),
-            x='eficiencia', y='segmento_promo',
+            x='eficiencia', y='segmento',
             orientation='h',
             color='eficiencia',
             color_continuous_scale=['#C44536', '#F0E68C', '#2E8B57'],
             labels={'eficiencia': 'Valor aportado / descuento consumido',
-                    'segmento_promo': ''}
+                    'segmento': ''}
         )
         fig.add_vline(x=1, line_dash="dash", line_color="black")
         fig.update_layout(height=350, showlegend=False)
@@ -230,7 +229,7 @@ elif pagina == "Perfiles":
     st.dataframe(ef, use_container_width=True)
 
     fig = px.scatter(ef, x='pct_descuento', y='pct_valor',
-                     size='n_hogares', text='segmento_promo',
+                     size='n_hogares', text='segmento',
                      labels={'pct_descuento': '% del descuento consumido',
                              'pct_valor': '% del valor aportado'})
     fig.add_shape(type="line", x0=0, y0=0, x1=30, y1=30,
@@ -240,3 +239,96 @@ elif pagina == "Perfiles":
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Por encima de la diagonal: el perfil aporta mas valor del descuento que consume. "
                "Por debajo: consume mas descuento del valor que aporta.")
+# ─────────────────────────────────────────────
+# PAGINA 5: CONSULTA POR CATEGORIA
+# ─────────────────────────────────────────────
+elif pagina == "Consulta":
+    st.title("Consulta por categoria")
+    st.caption("Cruce de sensibilidad al precio e incrementalidad promocional, "
+               "con recomendacion de accion comercial")
+
+    el = d['elasticidad'].copy()
+    bl = d['baseline'].copy()
+
+    # Cruzamos las dos tablas por categoria
+    cruce = el.merge(bl, on='COMMODITY_DESC', how='inner')
+
+    cats_disponibles = sorted(cruce['COMMODITY_DESC'].unique())
+    cat = st.selectbox("Selecciona una categoria", cats_disponibles,
+                        index=cats_disponibles.index('SOFT DRINKS') if 'SOFT DRINKS' in cats_disponibles else 0)
+
+    fila = cruce[cruce['COMMODITY_DESC'] == cat].iloc[0]
+
+    efecto_precio = fila['efecto_rebaja_pct']
+    incrementalidad = fila['pct_incremental']
+
+    st.subheader(cat)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Sensibilidad al precio", f"{efecto_precio:+.1f}%",
+              help="Cambio en cantidad por transaccion cuando el producto esta rebajado")
+    c2.metric("Incrementalidad (baseline)", f"{incrementalidad:.1f}%",
+              help="Porcentaje del volumen en promocion que es realmente nuevo")
+    c3.metric("Observaciones", f"{fila['n_observaciones']:,.0f}")
+
+    st.divider()
+
+    # Logica de recomendacion cruzando ambas metricas
+    if incrementalidad > 40 and abs(efecto_precio) < 15:
+        mecanismo = "penetracion"
+        recomendacion = ("Buena candidata para promocion. La alta incrementalidad "
+                          "indica que la promocion atrae compradores nuevos, mas que "
+                          "hacer que cada comprador se lleve mas unidades. Priorizar "
+                          "mecanicas de visibilidad (folleto, display) sobre descuentos "
+                          "agresivos de precio.")
+        color = "success"
+    elif incrementalidad > 40 and efecto_precio >= 15:
+        mecanismo = "cantidad por cesta"
+        recomendacion = ("Buena candidata para promocion. Tanto la incrementalidad "
+                          "como la respuesta al precio son altas: la promocion genera "
+                          "volumen nuevo Y hace que cada comprador se lleve mas unidades. "
+                          "Las mecanicas de volumen (multipack, 3x2) deberian funcionar bien.")
+        color = "success"
+    elif incrementalidad <= 20:
+        mecanismo = "ninguno claro"
+        recomendacion = ("Evitar o reducir la promocion en esta categoria. La mayor "
+                          "parte del volumen se venderia igual sin descuento, por lo "
+                          "que la inversion promocional regala margen sin generar "
+                          "demanda adicional apreciable.")
+        color = "error"
+    else:
+        mecanismo = "moderado"
+        recomendacion = ("Categoria de respuesta intermedia. No es prioritaria para "
+                          "invertir presupuesto promocional, pero tampoco es candidata "
+                          "clara a eliminar la promocion. Revisar caso por caso segun "
+                          "el margen disponible.")
+        color = "info"
+
+    st.write(f"**Mecanismo de respuesta dominante:** {mecanismo}")
+
+    if color == "success":
+        st.success(recomendacion)
+    elif color == "error":
+        st.error(recomendacion)
+    else:
+        st.info(recomendacion)
+
+    st.divider()
+
+    st.subheader("Posicion de esta categoria frente al resto")
+    fig = px.scatter(cruce, x='efecto_rebaja_pct', y='pct_incremental',
+                     hover_name='COMMODITY_DESC',
+                     labels={'efecto_rebaja_pct': 'Sensibilidad al precio (%)',
+                             'pct_incremental': 'Incrementalidad (%)'},
+                     opacity=0.4)
+
+    # Resaltar la categoria seleccionada
+    fig.add_scatter(x=[fila['efecto_rebaja_pct']], y=[fila['pct_incremental']],
+                     mode='markers', marker=dict(size=16, color='#C44536'),
+                     name=cat, showlegend=True)
+
+    fig.add_hline(y=40, line_dash="dash", line_color="gray")
+    fig.update_layout(height=450)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("La linea horizontal marca el umbral de incrementalidad alta (40%). "
+               "El punto rojo es la categoria seleccionada.")
