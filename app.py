@@ -21,12 +21,12 @@ d = cargar_datos()
 # Menu lateral
 st.sidebar.title("RGM Analytics")
 pagina = st.sidebar.radio(
-    "Navegacion",
+    "Navegación",
     ["Resumen", "Pricing", "Clientes", "Perfiles", "Consulta"]
 )
-# ─────────────────────────────────────────────
+
 # PAGINA 1: RESUMEN
-# ─────────────────────────────────────────────
+
 if pagina == "Resumen":
     st.title("Revenue Growth Management")
     st.caption("Analisis comercial sobre 2.500 hogares y 2,6M de transacciones")
@@ -69,9 +69,9 @@ if pagina == "Resumen":
         fig.update_layout(height=350, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
-# ─────────────────────────────────────────────
+
 # PAGINA 2: PRICING
-# ─────────────────────────────────────────────
+
 elif pagina == "Pricing":
     st.title("Sensibilidad al precio por categoria")
 
@@ -192,9 +192,9 @@ elif pagina == "Pricing":
                          'efecto_rebaja_pct', 'n_total']].round(2),
                      use_container_width=True)
 
-# ─────────────────────────────────────────────
+
 # PAGINA 3: CLIENTES
-# ─────────────────────────────────────────────
+
 elif pagina == "Clientes":
     st.title("Segmentacion de hogares por valor")
 
@@ -216,9 +216,9 @@ elif pagina == "Clientes":
     st.plotly_chart(fig, use_container_width=True)
     st.dataframe(seg, use_container_width=True)
 
-# ─────────────────────────────────────────────
+
 # PAGINA 4: PERFILES
-# ─────────────────────────────────────────────
+
 elif pagina == "Perfiles":
     st.title("Perfiles de respuesta promocional")
     st.caption("Como se comporta cada hogar frente a las promociones (K-Means)")
@@ -239,9 +239,9 @@ elif pagina == "Perfiles":
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Por encima de la diagonal: el perfil aporta mas valor del descuento que consume. "
                "Por debajo: consume mas descuento del valor que aporta.")
-# ─────────────────────────────────────────────
+
 # PAGINA 5: CONSULTA POR CATEGORIA
-# ─────────────────────────────────────────────
+
 elif pagina == "Consulta":
     st.title("Consulta por categoria")
     st.caption("Cruce de sensibilidad al precio e incrementalidad promocional, "
