@@ -22,7 +22,7 @@ d = cargar_datos()
 st.sidebar.title("RGM Analytics")
 pagina = st.sidebar.radio(
     "Navegación",
-    ["Resumen", "Pricing", "Clientes", "Perfiles", "Consulta"]
+    ["Resumen", "Pricing", "Clientes", "Perfiles","Optimizador"]
 )
 
 # PAGINA 1: RESUMEN
@@ -240,95 +240,98 @@ elif pagina == "Perfiles":
     st.caption("Por encima de la diagonal: el perfil aporta mas valor del descuento que consume. "
                "Por debajo: consume mas descuento del valor que aporta.")
 
-# PAGINA 5: CONSULTA POR CATEGORIA
+# PAGINA 5: OPTIMIZADOR DE PRESUPUESTO (PuLP)
 
-elif pagina == "Consulta":
-    st.title("Consulta por categoria")
-    st.caption("Cruce de sensibilidad al precio e incrementalidad promocional, "
-               "con recomendacion de accion comercial")
+elif pagina == "Optimizador":
+    import pulp
 
-    el = d['elasticidad'].copy()
+    st.title("Optimizador de presupuesto promocional")
+    st.caption("Reparte un presupuesto promocional entre categorias maximizando "
+               "el retorno neto estimado (optimizacion lineal con PuLP)")
+
     bl = d['baseline'].copy()
 
-    # Cruzamos las dos tablas por categoria
-    cruce = el.merge(bl, on='COMMODITY_DESC', how='inner')
+    st.subheader("Parametros de simulacion")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        presupuesto = st.number_input("Presupuesto total (€)", min_value=1000,
+                                       max_value=500000, value=100000, step=10000)
+    with col2:
+        margen_pct = st.slider("Margen bruto (%)", 10, 50, 25) / 100
+    with col3:
+        descuento_pct = st.slider("Descuento promocional (%)", 5, 40, 20) / 100
+    with col4:
+        precio_ref = st.number_input("Precio medio de referencia (€)", min_value=0.5,
+                                     max_value=20.0, value=3.0, step=0.5)
 
-    cats_disponibles = sorted(cruce['COMMODITY_DESC'].unique())
-    cat = st.selectbox("Selecciona una categoria", cats_disponibles,
-                        index=cats_disponibles.index('SOFT DRINKS') if 'SOFT DRINKS' in cats_disponibles else 0)
+    st.caption("Todos los parametros son supuestos que el usuario define para el escenario. "
+               "El calculo de retorno se basa en la incrementalidad real medida por categoria.")
 
-    fila = cruce[cruce['COMMODITY_DESC'] == cat].iloc[0]
+    # Calculo de ROI por categoria con los supuestos introducidos
+    bl = bl[bl['n_observaciones'] >= 200].copy()
 
-    efecto_precio = fila['efecto_rebaja_pct']
-    incrementalidad = fila['pct_incremental']
+    coste_unitario = precio_ref * descuento_pct
+    margen_unitario = precio_ref * margen_pct
 
-    st.subheader(cat)
+    bl['coste_categoria'] = bl['unidades_reales'] * coste_unitario
+    bl['beneficio_categoria'] = bl['incremental'] * margen_unitario
+    bl['beneficio_neto'] = bl['beneficio_categoria'] - bl['coste_categoria']
+    bl['roi'] = bl['beneficio_neto'] / bl['coste_categoria']
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Sensibilidad al precio", f"{efecto_precio:+.1f}%",
-              help="Cambio en cantidad por transaccion cuando el producto esta rebajado")
-    c2.metric("Incrementalidad (baseline)", f"{incrementalidad:.1f}%",
-              help="Porcentaje del volumen en promocion que es realmente nuevo")
-    c3.metric("Observaciones", f"{fila['n_observaciones']:,.0f}")
+    # Solo tiene sentido invertir en categorias con ROI positivo
+    candidatas = bl[bl['roi'] > 0].copy()
 
-    st.divider()
-
-    # Logica de recomendacion cruzando ambas metricas
-    if incrementalidad > 40 and abs(efecto_precio) < 15:
-        mecanismo = "penetracion"
-        recomendacion = ("Buena candidata para promocion. La alta incrementalidad "
-                          "indica que la promocion atrae compradores nuevos, mas que "
-                          "hacer que cada comprador se lleve mas unidades. Priorizar "
-                          "mecanicas de visibilidad (folleto, display) sobre descuentos "
-                          "agresivos de precio.")
-        color = "success"
-    elif incrementalidad > 40 and efecto_precio >= 15:
-        mecanismo = "cantidad por cesta"
-        recomendacion = ("Buena candidata para promocion. Tanto la incrementalidad "
-                          "como la respuesta al precio son altas: la promocion genera "
-                          "volumen nuevo Y hace que cada comprador se lleve mas unidades. "
-                          "Las mecanicas de volumen (multipack, 3x2) deberian funcionar bien.")
-        color = "success"
-    elif incrementalidad <= 20:
-        mecanismo = "ninguno claro"
-        recomendacion = ("Evitar o reducir la promocion en esta categoria. La mayor "
-                          "parte del volumen se venderia igual sin descuento, por lo "
-                          "que la inversion promocional regala margen sin generar "
-                          "demanda adicional apreciable.")
-        color = "error"
+    if len(candidatas) == 0:
+        st.error("Con estos supuestos, ninguna categoria tiene retorno positivo. "
+                 "Prueba a subir el margen o bajar el descuento.")
     else:
-        mecanismo = "moderado"
-        recomendacion = ("Categoria de respuesta intermedia. No es prioritaria para "
-                          "invertir presupuesto promocional, pero tampoco es candidata "
-                          "clara a eliminar la promocion. Revisar caso por caso segun "
-                          "el margen disponible.")
-        color = "info"
+        # ── OPTIMIZACION CON PuLP ──
+        prob = pulp.LpProblem("Optimizador_Presupuesto", pulp.LpMaximize)
+        cats = candidatas['COMMODITY_DESC'].tolist()
 
-    st.write(f"**Mecanismo de respuesta dominante:** {mecanismo}")
+        # Variable: fraccion del coste de cada categoria que se financia (0 a 1)
+        asignacion = pulp.LpVariable.dicts("asig", cats, lowBound=0, upBound=1)
 
-    if color == "success":
-        st.success(recomendacion)
-    elif color == "error":
-        st.error(recomendacion)
-    else:
-        st.info(recomendacion)
+        coste = dict(zip(candidatas['COMMODITY_DESC'], candidatas['coste_categoria']))
+        beneficio_neto = dict(zip(candidatas['COMMODITY_DESC'], candidatas['beneficio_neto']))
 
-    st.divider()
+        # Objetivo: maximizar beneficio neto total
+        prob += pulp.lpSum([asignacion[c] * beneficio_neto[c] for c in cats])
 
-    st.subheader("Posicion de esta categoria frente al resto")
-    fig = px.scatter(cruce, x='efecto_rebaja_pct', y='pct_incremental',
-                     hover_name='COMMODITY_DESC',
-                     labels={'efecto_rebaja_pct': 'Sensibilidad al precio (%)',
-                             'pct_incremental': 'Incrementalidad (%)'},
-                     opacity=0.4)
+        # Restriccion: no superar el presupuesto
+        prob += pulp.lpSum([asignacion[c] * coste[c] for c in cats]) <= presupuesto
 
-    # Resaltar la categoria seleccionada
-    fig.add_scatter(x=[fila['efecto_rebaja_pct']], y=[fila['pct_incremental']],
-                     mode='markers', marker=dict(size=16, color='#C44536'),
-                     name=cat, showlegend=True)
+        prob.solve(pulp.PULP_CBC_CMD(msg=False))
 
-    fig.add_hline(y=40, line_dash="dash", line_color="gray")
-    fig.update_layout(height=450)
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("La linea horizontal marca el umbral de incrementalidad alta (40%). "
-               "El punto rojo es la categoria seleccionada.")
+        candidatas['fraccion_financiada'] = [asignacion[c].varValue for c in cats]
+        candidatas['presupuesto_asignado'] = candidatas['coste_categoria'] * candidatas['fraccion_financiada']
+        candidatas['retorno_obtenido'] = candidatas['beneficio_neto'] * candidatas['fraccion_financiada']
+
+        resultado = candidatas[candidatas['presupuesto_asignado'] > 1].sort_values(
+            'retorno_obtenido', ascending=False)
+
+        st.divider()
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Presupuesto asignado", f"{resultado['presupuesto_asignado'].sum():,.0f} €")
+        c2.metric("Retorno neto estimado", f"{resultado['retorno_obtenido'].sum():,.0f} €")
+        c3.metric("Categorias financiadas", f"{len(resultado)}")
+
+        st.subheader("Asignacion recomendada")
+        st.dataframe(
+            resultado[['COMMODITY_DESC', 'incremental', 'roi',
+                       'presupuesto_asignado', 'retorno_obtenido']].round(2),
+            use_container_width=True
+        )
+
+        fig = px.bar(resultado.head(15).sort_values('presupuesto_asignado'),
+                     x='presupuesto_asignado', y='COMMODITY_DESC',
+                     orientation='h', color_discrete_sequence=['#2E8B57'],
+                     labels={'presupuesto_asignado': 'Presupuesto asignado (€)',
+                             'COMMODITY_DESC': ''})
+        fig.update_layout(height=500)
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.info("El optimizador reparte el presupuesto priorizando las categorias con mayor "
+                "retorno neto, hasta agotarlo. Las categorias con ROI negativo bajo estos "
+                "supuestos quedan excluidas automaticamente.")
