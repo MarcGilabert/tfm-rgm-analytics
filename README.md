@@ -25,7 +25,15 @@ Un cuarto bloque identifica perfiles de comportamiento promocional que matizan l
 
 ## Dataset
 
+
+
 [Dunnhumby — The Complete Journey](https://data.mendeley.com/datasets/7myy93ym6k/1) (Mendeley Data, licencia CC BY 4.0). Historial de compra de 2.500 hogares durante 711 días en una cadena de distribución alimentaria.
+
+
+
+https://www.kaggle.com/datasets/frtgnn/dunnhumby-the-complete-journey/data
+
+
 
 ## Estructura del repositorio
 
@@ -36,12 +44,12 @@ tfm-app/
 ├── requirements.txt
 ├── data/                           # Resultados procesados (CSV)
 └── notebooks/
-    ├── 00\\\_EDA.ipynb
-    ├── 01\\\_Feature\\\_Engineering.ipynb
-    ├── 02\\\_Price\\\_Elasticity.ipynb
-    ├── 03\\\_CLV.ipynb
-    ├── 04\\\_Baseline.ipynb
-    └── 05\\\_Segmentacion\\\_Promocional.ipynb
+    ├── 00\\\\\\\_EDA.ipynb
+    ├── 01\\\\\\\_Feature\\\\\\\_Engineering.ipynb
+    ├── 02\\\\\\\_Price\\\\\\\_Elasticity.ipynb
+    ├── 03\\\\\\\_CLV.ipynb
+    ├── 04\\\\\\\_Baseline.ipynb
+    └── 05\\\\\\\_Segmentacion\\\\\\\_Promocional.ipynb
 ```
 
 ## Metodología y técnicas
